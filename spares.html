@@ -1,0 +1,48 @@
+<template>
+    <lightning-card title="Product Items" icon-name="standard:product_item">
+        <div class="slds-p-around_medium">
+            <lightning-input type="search" label="Search" value={searchKey} onchange={handleSearch}></lightning-input>
+        </div>
+        <template if:true={filteredProductItems.length}>
+            <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                <thead>
+                    <tr>
+                        <th scope="col">
+                            <div class="slds-truncate" title="Product Name">Product Name</div>
+                        </th>
+                        <th scope="col">
+                            <div class="slds-truncate" title="Quantity On Hand">Quantity On Hand</div>
+                        </th>
+                        <th scope="col">
+                            <div class="slds-truncate" title="Request Quantity">Request Quantity</div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template for:each={filteredProductItems} for:item="item">
+                        <tr key={item.Id}>
+                            <td>
+                                <div class="slds-truncate" title={item.Name}>{item.Name}</div>
+                            </td>
+                            <td>
+                                <div class="slds-truncate" title={item.QuantityOnHand}>{item.QuantityOnHand}</div>
+                            </td>
+                            <td>
+                                <lightning-input type="number" value={item.requestQuantity} data-id={item.Id} onchange={handleRequestChange}></lightning-input>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </template>
+        <template if:true={error}>
+            <div class="slds-text-color_error">
+                <p>{error}</p>
+            </div>
+        </template>
+        <div class="slds-p-around_medium">
+            <lightning-button label="Request Items" onclick={handleRequestItems}></lightning-button>
+            <lightning-button label="Refresh" onclick={handleRefresh}></lightning-button>
+        </div>
+    </lightning-card>
+</template>
