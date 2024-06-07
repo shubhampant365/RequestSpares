@@ -1,0 +1,262 @@
+<template>
+    <lightning-card title="Create New Asset">
+        <div class="slds-p-around_medium">
+            <lightning-input type="checkbox" label="Competitor Product" onchange={handleCheckboxChange}></lightning-input>
+            <lightning-record-picker label="Products" placeholder="Search Product" object-api-name="Product2" onchange={handleProductChange}></lightning-record-picker>
+            <lightning-record-picker label="Address Code" placeholder="Search Address Code" object-api-name="Address__c" onchange={handleAddressChange}></lightning-record-picker>
+            <lightning-combobox label="Area Code" options={areaCodeOptions} value={areaCodeValue} onchange={handleAreaCodeChange}></lightning-combobox>
+            <template if:true={showCompetitorForm}>
+                <!-- Competitor Product form -->
+                <lightning-combobox label="Business Unit" value={competitorBusinessUnit} options={businessUnitOptions} onchange={handleCompetitorBusinessUnitChange}></lightning-combobox>
+                <lightning-input class="input-field" label="Brand Name" value={brandName} onchange={handleBrandNameChange}></lightning-input>
+                <lightning-input class="input-field" label="Asset Type" value={assetType} onchange={handleAssetTypeChange}></lightning-input>
+                <lightning-input class="input-field" label="Asset Name" value={assetName} onchange={handleAssetNameChange}></lightning-input>
+                <lightning-input class="input-field" label="Capacity" type="number" value={capacity} onchange={handleCapacityChange}></lightning-input>
+                <lightning-input class="input-field" label="Age of Product" type="number" value={ageOfProduct} onchange={handleAgeOfProductChange}></lightning-input>
+                <lightning-input class="input-field" label="Manufacturing Date" type="date" value={manufacturingDate} onchange={handleManufacturingDateChange}></lightning-input>
+            </template>
+            <template if:false={showCompetitorForm}>
+                <!-- Standard Asset form -->
+                <lightning-combobox label="Business Unit" value={assetBusinessUnit} options={businessUnitOptions} onchange={handleAssetBusinessUnitChange}></lightning-combobox>
+                <lightning-input label="Serial Number" value={serialNumber} onchange={handleSerialNumberChange} disabled={serialIdScanned}></lightning-input>
+                <template if:true={showScannerButton}>
+                    <lightning-button label="Open Scanner" onclick={openScanner}></lightning-button>
+                </template>
+                <lightning-input label="Asset Name" value={assetName} onchange={handleAssetNameChange}></lightning-input>
+                <lightning-input label="Description" value={assetDescription} onchange={handleDescriptionChange}></lightning-input>
+                <!-- Add more fields for standard asset -->
+            </template>
+            <lightning-button label="Create Asset" onclick={createAsset}></lightning-button>
+        </div>
+    </lightning-card>
+</template>
+
+
+
+
+import { LightningElement, track, api, wire } from 'lwc';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import createAsset from '@salesforce/apex/AssetCreationController.createAsset';
+import { getBarcodeScanner } from 'lightning/mobileCapabilities';
+import ASSET_OBJECT from '@salesforce/schema/Asset';
+import AREA_FIELD from '@salesforce/schema/Asset.Area_Code__c';
+import { getObjectInfo, getPicklistValues } from 'lightning/uiObjectInfoApi';
+
+const BUSINESS_UNIT_OPTIONS = [
+    { label: 'Appliances', value: 'Appliances' },
+    { label: 'Locks', value: 'Locks' },
+    { label: 'Storage', value: 'Storage' },
+    { label: 'Interio', value: 'Interio' }
+];
+
+export default class AssetCreationForm extends LightningElement {
+    @api recordId;
+    @track assetName;
+    @track assetDescription;
+    @track assetBusinessUnit;
+    @track competitorBusinessUnit;
+    @track brandName;
+    @track assetType;
+    @track capacity;
+    @track ageOfProduct;
+    @track manufacturingDate;
+    @track serialNumber;
+    @track showCompetitorForm = false;
+    @track showScannerButton = false;
+    @track serialIdScanned = false;
+    @track productValue;
+    @track addressValue;
+    @track areaCodeValue;
+    @track areaCodeOptions = [];
+    businessUnitOptions = BUSINESS_UNIT_OPTIONS;
+    barcodeScanner;
+
+    @wire(getObjectInfo, { objectApiName: ASSET_OBJECT })
+    assetInfo;
+
+    @wire(getPicklistValues, { recordTypeId: '$assetInfo.data.defaultRecordTypeId', fieldApiName: AREA_FIELD })
+    wiredPicklistValues({ error, data }) {
+        if (data) {
+            this.areaCodeOptions = data.values.map(item => ({ label: item.label, value: item.value }));
+        } else if (error) {
+            console.error(error);
+        }
+    }
+
+    handleAreaCodeChange(event) {
+        this.areaCodeValue = event.detail.value;
+    }
+
+    handleProductChange(event) {
+        console.log('EventDetails-->', JSON.stringify(event.detail));
+        this.productValue = event.detail.value;
+    }
+
+    handleAddressChange(event) {
+        this.addressValue = event.detail.recordId;
+    }
+
+    handleCheckboxChange(event) {
+        this.showCompetitorForm = event.target.checked;
+    }
+
+    handleAssetNameChange(event) {
+        this.assetName = event.target.value;
+    }
+
+    handleDescriptionChange(event) {
+        this.assetDescription = event.target.value;
+    }
+
+    handleAssetBusinessUnitChange(event) {
+        this.assetBusinessUnit = event.target.value;
+        this.updateScannerButtonVisibility();
+    }
+
+    handleCompetitorBusinessUnitChange(event) {
+        this.competitorBusinessUnit = event.target.value;
+    }
+
+    handleBrandNameChange(event) {
+        this.brandName = event.target.value;
+    }
+
+    handleAssetTypeChange(event) {
+        this.assetType = event.target.value;
+    }
+
+    handleCapacityChange(event) {
+        this.capacity = event.target.value;
+    }
+
+    handleAgeOfProductChange(event) {
+        this.ageOfProduct = event.target.value;
+    }
+
+    handleManufacturingDateChange(event) {
+        this.manufacturingDate = event.target.value;
+    }
+
+    handleSerialNumberChange(event) {
+        this.serialNumber = event.target.value;
+    }
+
+    connectedCallback() {
+        this.barcodeScanner = getBarcodeScanner();
+    }
+
+    createAsset() {
+        createAsset({
+            assetName: this.assetName,
+            assetDescription: this.assetDescription,
+            assetBusinessUnit: this.showCompetitorForm ? this.competitorBusinessUnit : this.assetBusinessUnit,
+            isCompetitor: this.showCompetitorForm,
+            brandName: this.brandName,
+            assetType: this.assetType,
+            capacity: this.capacity,
+            ageOfProduct: this.ageOfProduct,
+            manufacturingDate: this.manufacturingDate,
+            serialNumber: this.serialNumber,
+            recordId: this.recordId,
+            productId: this.productValue,
+            addressCode: this.addressValue,
+            areaCode: this.areaCodeValue
+        })
+        .then(() => {
+            this.resetForm();
+            this.showToast('Success', 'Asset record created successfully', 'success');
+        })
+        .catch(error => {
+            console.error('Error creating asset:', error);
+            this.showToast('Error', 'Failed to create asset: ' + error.body.message, 'error');
+        });
+    }
+
+    resetForm() {
+        this.assetName = '';
+        this.assetDescription = '';
+        this.assetBusinessUnit = '';
+        this.competitorBusinessUnit = '';
+        this.brandName = '';
+        this.assetType = '';
+        this.capacity = null;
+        this.ageOfProduct = null;
+        this.manufacturingDate = null;
+        this.serialNumber = '';
+        this.showCompetitorForm = false;
+        this.showScannerButton = false;
+        this.serialIdScanned = false;
+        this.productValue = '';
+        this.addressValue = '';
+        this.areaCodeValue = '';
+    }
+
+    openScanner() {
+        if (this.barcodeScanner.isAvailable()) {
+            const scanningOptions = {
+                barcodeTypes: ["code128", "code39", "code93", "ean13", "ean8", "upca", "upce", "qr", "datamatrix", "itf", "pdf417"],
+                instructionText: "Position barcode in the scanner view.\nPress x to stop.",
+                successText: "Successful Scan!"
+            };
+            this.barcodeScanner.scan(scanningOptions)
+                .then((results) => {
+                    this.serialNumber = results[0].value;
+                    this.serialIdScanned = true;
+                })
+                .catch((error) => {
+                    this.showToast('Error', error.body.message, 'error');
+                });
+        } else {
+            this.showToast('Error', 'Barcode scanner is not available', 'error');
+        }
+    }
+
+    updateScannerButtonVisibility() {
+        this.showScannerButton = ['Appliances', 'Locks'].includes(this.assetBusinessUnit);
+    }
+
+    showToast(title, message, variant) {
+        const toastEvent = new ShowToastEvent({
+            title: title,
+            message: message,
+            variant: variant
+        });
+        this.dispatchEvent(toastEvent);
+    }
+}
+
+
+
+
+public with sharing class AssetCreationController {
+    
+    @AuraEnabled
+    public static void createAsset(String assetName, String assetDescription, String assetBusinessUnit, Boolean isCompetitor, String serialNumber,
+                                   String brandName, String assetType, Decimal capacity, Integer ageOfProduct, Date manufacturingDate, String recordId, String productId, String addressCode, String areaCode) {
+        try {
+            System.debug('RecordID===>' + recordId);
+            System.debug('ProductCode-<'+productId);
+            System.debug('AddressCode-->' + addressCode + '   addresscod->'+ areaCode );
+            Asset newAsset = new Asset();
+            newAsset.Name = assetName;
+            newAsset.Description = assetDescription;
+            newAsset.IsCompetitorProduct = isCompetitor;
+            newAsset.AccountId = recordId;
+            newAsset.Product2Id = productId;
+            newAsset.Equipment_Serial_No__c = serialNumber;
+            newAsset.Address_Code__c = addressCode;
+            newAsset.Area_Code__c = areaCode;
+            if (isCompetitor) {
+                newAsset.Brand_Name__c = brandName;
+                newAsset.Asset_Type__c = assetType;
+                newAsset.Capacity__c = capacity;
+                newAsset.Age_of_Product__c = ageOfProduct;
+                newAsset.ManufactureDate = manufacturingDate;
+            }
+            
+            insert newAsset;
+        } catch(Exception e) {
+            throw new AuraHandledException('Error occurred while creating asset: ' + e.getMessage());
+        }
+    }
+}
