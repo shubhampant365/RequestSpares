@@ -1,0 +1,97 @@
+<template>
+    <div class="form-container" style="padding: 1rem; border: 1px solid #dcdcdc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); max-width: 400px; margin: 0 auto;">
+        <lightning-record-picker 
+            label="Products"
+            placeholder="Search Products..."
+            object-api-name="Product2"
+            onrecordselect={handleProductSelect}
+            style="margin-bottom: 1rem;">
+        </lightning-record-picker>
+        <lightning-input 
+            name="quantity" 
+            label="Quantity" 
+            type="number" 
+            value={quantity} 
+            onchange={handleQuantityChange}
+            style="margin-bottom: 1rem; width: 100%;">
+        </lightning-input>
+        <lightning-button 
+            label="Submit" 
+            onclick={handleSubmit}
+            style="width: 100%;">
+        </lightning-button>
+    </div>
+</template>
+
+
+import { LightningElement, api, track } from 'lwc';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import submitWorkOrderLineItem from '@salesforce/apex/WorkOrderLineItemController.submitWorkOrderLineItem';
+
+export default class WorkOrderLineItemForm extends LightningElement {
+    @api recordId;
+    @track quantity = 0;
+    @track productId;
+
+    handleProductSelect(event) {
+        this.productId = event.detail.value;
+    }
+
+    handleQuantityChange(event) {
+        this.quantity = event.target.value;
+    }
+
+    handleSubmit() {
+        submitWorkOrderLineItem({ 
+            workOrderId: this.recordId,
+            productId: this.productId,
+            quantity: this.quantity 
+        })
+        .then(result => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Success',
+                    message: 'Work Order Line Item and Product Request created successfully',
+                    variant: 'success',
+                }),
+            );
+        })
+        .catch(error => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error creating records',
+                    message: error.body.message,
+                    variant: 'error',
+                }),
+            );
+        });
+    }
+}
+
+
+
+public with sharing class WorkOrderLineItemController {
+    @AuraEnabled
+    public static void submitWorkOrderLineItem(Id workOrderId, Id productId, Integer quantity) {
+        // Create a new WorkOrderLineItem record
+        WorkOrderLineItem woli = new WorkOrderLineItem();
+        woli.WorkOrderId = workOrderId;
+        woli.Product2Id = productId;
+        woli.Quantity = quantity;
+        insert woli;
+
+        // Create a new ProductRequest record
+        ProductRequest productRequestRecord = new ProductRequest();
+        productRequestRecord.WorkOrderLineItemId = woli.Id;
+        productRequestRecord.Status = 'Submitted';
+        insert productRequestRecord;
+
+        // Create a new ProductRequestLineItem record
+        ProductRequestLineItem prliRecord = new ProductRequestLineItem();
+        prliRecord.QuantityRequested = quantity;
+        prliRecord.Status = 'Submitted';
+        prliRecord.Product2Id = productId;
+        prliRecord.ParentId = productRequestRecord.Id;
+        insert prliRecord;
+    }
+}
